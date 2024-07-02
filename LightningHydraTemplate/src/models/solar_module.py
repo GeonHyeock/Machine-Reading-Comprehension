@@ -49,7 +49,7 @@ class SolarModule(LightningModule):
         self.val_f1_best.reset()
 
     def model_step(self, batch: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        x = {k: batch[k] for k in ["input_ids", "token_type_ids", "attention_mask"]}
+        x = {k: batch[k] for k in ["input_ids", "attention_mask"]}
         logits = self.forward(x)
         loss = self.criterion(logits, batch)
 

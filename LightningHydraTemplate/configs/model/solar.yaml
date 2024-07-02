@@ -1,10 +1,10 @@
 _target_: src.models.solar_module.SolarModule
 
 optimizer:
-  _target_: torch.optim.Adam
+  _target_: torch.optim.AdamW
   _partial_: true
   lr: 0.001
-  weight_decay: 0.0
+
 
 scheduler:
   _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
@@ -14,10 +14,9 @@ scheduler:
   patience: 10
 
 net:
-  _target_: src.models.components.SOLAR.SOLAR
-  name: "beomi/korean-hatespeech-multilabel"
-  lora_module:
-  train_module:
+  _target_: src.models.components.solar.SOLAR
+  name: "beomi/Llama-3-Open-Ko-8B-Instruct-preview"
+  lora_module: ["self_attn.q_proj", "self_attn.v_proj", "self_attn.k_proj", "self_attn.o_proj"]
 
 # compile model for faster training with pytorch 2.0
 compile: false

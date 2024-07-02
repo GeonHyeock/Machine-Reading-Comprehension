@@ -1,7 +1,7 @@
 _target_: src.data.datamodule.DataModule
 data_dir: ${paths.data_dir}
-batch_size: 16
+batch_size: 1
 num_workers: 4
 pin_memory: False
 text_folder: raw_data
-name: "beomi/korean-hatespeech-multilabel"
+name: "beomi/Llama-3-Open-Ko-8B-Instruct-preview"

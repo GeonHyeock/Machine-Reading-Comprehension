@@ -49,7 +49,7 @@ class Collate_fn:
         inputs = self.tokenizer(
             raw_text["question"],
             raw_text["context"],
-            max_length=512,
+            max_length=1536,
             truncation="only_second",
             return_offsets_mapping=True,
             padding="max_length",
