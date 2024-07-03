@@ -1,49 +1,42 @@
 from torch.utils.data import Dataset
 import pandas as pd
 import torch
+import json
 import os
 
 
 class MyDataset(Dataset):
-    def __init__(self, df, data_folder_path, dtype):
+    def __init__(self, df, tokenizer, data_folder_path, dtype):
         self.df = df
+        self.tokenizer = tokenizer
         self.path = os.path.join(data_folder_path, dtype)
         self.data_folder_path = data_folder_path
         self.dtype = dtype
 
+        # 데이터 없으면 저장
+        if not os.path.isdir(self.path):
+            os.makedirs(self.path)
+            idx = 0
+            for _, data in self.df.iterrows():
+                data = {
+                    "id": [data.id],
+                    "context": [data.context],
+                    "question": [data.question],
+                    "answers": [{"text": [data.answer], "answer_start": [data.context.find(data.answer)]}],
+                }
+                preprocess_data = self.preprocess_function(data)
+                for i in range(len(preprocess_data["start_positions"])):
+                    sub_data = {k: v[i].tolist() for k, v in preprocess_data.items()}
+                    sub_data.update(data)
+                    with open(os.path.join(data_folder_path, dtype, f"{idx}.json"), "w") as f:
+                        json.dump(sub_data, f, indent=4)
+                        idx += 1
+
     def __len__(self):
-        return len(self.df)
+        return len(os.listdir(self.path))
 
     def __getitem__(self, idx):
-        return self.df.iloc[idx]
-
-
-class Collate_fn:
-    def __init__(self, tokenizer, dtype):
-        self.tokenizer = tokenizer
-        self.dtype = dtype
-
-    def __call__(self, batch):
-        data = pd.DataFrame(batch)
-        if self.dtype != "test":
-            data = {
-                "id": data.id.to_list(),
-                "context": data.context.to_list(),
-                "question": data.question.to_list(),
-                "answers": [
-                    {"text": [text], "answer_start": [answer_start]}
-                    for text, answer_start in zip(
-                        data.answer.to_list(), data.apply(lambda x: x.context.find(x.answer), axis=1).to_list()
-                    )
-                ],
-            }
-            data.update(self.preprocess_function(data))
-            return data
-        else:
-            batch = pd.DataFrame(batch)
-            output = self.tokenizer([str(i) for i in batch.X.to_list()], padding="max_length", max_length=512, truncation=True)
-            output.update({"Y": batch["Y"].values, "label": batch["label"].values})
-            return {k: torch.tensor(v) for k, v in output.items()}
+        return json.load(open(os.path.join(self.path, f"{idx}.json"), "r"))
 
     def preprocess_function(self, raw_text, max_length=384, stride=128):
         inputs = self.tokenizer(
@@ -101,5 +94,31 @@ class Collate_fn:
 
         inputs["start_positions"] = torch.tensor(start_positions)
         inputs["end_positions"] = torch.tensor(end_positions)
-        inputs["context_position"] = context_position
+        inputs["context_position"] = torch.tensor(context_position)
         return inputs
+
+
+class Collate_fn:
+    def __init__(self, dtype):
+        self.dtype = dtype
+
+    def __call__(self, batch):
+        data = pd.DataFrame(batch)
+        if self.dtype != "test":
+            return {
+                "input_ids": torch.tensor(data["input_ids"]),
+                "attention_mask": torch.tensor(data["attention_mask"]),
+                "overflow_to_sample_mapping": data["overflow_to_sample_mapping"],
+                "start_positions": torch.tensor(data["start_positions"]),
+                "end_positions": torch.tensor(data["end_positions"]),
+                "context_position": data["context_position"],
+                "id": data["id"],
+                "context": data["context"],
+                "question": data["question"],
+                "answers": data["answers"],
+            }
+        else:
+            batch = pd.DataFrame(batch)
+            output = self.tokenizer([str(i) for i in batch.X.to_list()], padding="max_length", max_length=512, truncation=True)
+            output.update({"Y": batch["Y"].values, "label": batch["label"].values})
+            return {k: torch.tensor(v) for k, v in output.items()}

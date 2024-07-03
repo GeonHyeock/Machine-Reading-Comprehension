@@ -32,11 +32,13 @@ class DataModule(LightningDataModule):
         ].reset_index(drop=True)
         test_df = pd.read_csv(os.path.join(data_dir, text_folder, "train.csv"))
 
+        data_dir = os.path.join(data_dir, text_folder)
         # dataset
         self.tokenizer = AutoTokenizer.from_pretrained(name, padding_side="right")
-        self.data_train: Dataset = MyDataset(train_df, data_dir, "train")
-        self.data_val: Dataset = MyDataset(valid_df, data_dir, "valid")
-        self.data_test: Dataset = MyDataset(test_df, data_dir, "test")
+        self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.data_train: Dataset = MyDataset(train_df, self.tokenizer, data_dir, "train")
+        self.data_val: Dataset = MyDataset(valid_df, self.tokenizer, data_dir, "valid")
+        self.data_test: Dataset = MyDataset(test_df, self.tokenizer, data_dir, "test")
 
         self.batch_size_per_device = batch_size
 
@@ -63,7 +65,7 @@ class DataModule(LightningDataModule):
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
             shuffle=True,
-            collate_fn=Collate_fn(self.tokenizer, "train"),
+            collate_fn=Collate_fn("train"),
         )
 
     def val_dataloader(self) -> DataLoader[Any]:
@@ -77,7 +79,7 @@ class DataModule(LightningDataModule):
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
             shuffle=False,
-            collate_fn=Collate_fn(self.tokenizer, "valid"),
+            collate_fn=Collate_fn("valid"),
         )
 
     def test_dataloader(self) -> DataLoader[Any]:
@@ -91,7 +93,7 @@ class DataModule(LightningDataModule):
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
             shuffle=False,
-            collate_fn=Collate_fn(self.tokenizer, "test"),
+            collate_fn=Collate_fn("test"),
         )
 
     def teardown(self, stage: Optional[str] = None) -> None:

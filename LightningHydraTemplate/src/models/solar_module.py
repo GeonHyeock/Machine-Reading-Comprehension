@@ -49,7 +49,7 @@ class SolarModule(LightningModule):
         self.val_f1_best.reset()
 
     def post_process(self, logit, batch, n_best=20, max_answer_length=30):
-        best_answer = defaultdict(list)
+        best_answer, answer = [], []
         start_logit = logit["start_logits"].detach().cpu()
         end_logit = logit["end_logits"].detach().cpu()
         idx = 0
@@ -68,14 +68,16 @@ class SolarModule(LightningModule):
                     if end_index < start_index or end_index - start_index + 1 > max_answer_length:
                         continue
 
-                    best_answer[id].append(
+                    answer.append(
                         {
                             "input_ids": input_ids,
                             "logit_score": start_logit[idx][start_index] + end_logit[idx][end_index],
                         }
                     )
-
-        return {k: max(v, key=lambda x: x["logit_score"]) for k, v in best_answer.items()}
+            best_answer.append(
+                {ans["input_ids"]: max(ans["logit_score"], key=lambda x: x["logit_score"]) for ans in best_answer.items()}
+            )
+        return best_answer
 
     def model_step(self, batch: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         x = {k: batch[k] for k in ["input_ids", "attention_mask"]}

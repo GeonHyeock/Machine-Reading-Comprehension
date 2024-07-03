@@ -12,6 +12,7 @@ class SOLAR(nn.Module):
     ) -> None:
         super(SOLAR, self).__init__()
         self.tokenizer = AutoTokenizer.from_pretrained(name)
+        self.tokenizer.pad_token = self.tokenizer.eos_token
         self.model = AutoModel.from_pretrained(name)
         self.qa_output = QaOutput(4096)
 
