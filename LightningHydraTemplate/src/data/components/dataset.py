@@ -45,27 +45,32 @@ class Collate_fn:
             output.update({"Y": batch["Y"].values, "label": batch["label"].values})
             return {k: torch.tensor(v) for k, v in output.items()}
 
-    def preprocess_function(self, raw_text):
+    def preprocess_function(self, raw_text, max_length=384, stride=128):
         inputs = self.tokenizer(
             raw_text["question"],
             raw_text["context"],
-            max_length=1536,
+            max_length=max_length,
+            stride=stride,
             truncation="only_second",
             return_offsets_mapping=True,
+            return_overflowing_tokens=True,
             padding="max_length",
             return_tensors="pt",
         )
 
         offset_mapping = inputs.pop("offset_mapping")
+        overflow_to_sample_mapping = inputs["overflow_to_sample_mapping"]
         answers = raw_text["answers"]
         start_positions = []
         end_positions = []
+        context_position = []
 
         for i, offset in enumerate(offset_mapping):
-            answer = answers[i]
+            example_index = overflow_to_sample_mapping[i]
+            answer = answers[example_index]
             start_char = answer["answer_start"][0]
             end_char = answer["answer_start"][0] + len(answer["text"][0])
-            sequence_ids = inputs.sequence_ids(i)
+            sequence_ids = inputs.sequence_ids(i) + [None]
 
             # Find the start and end of the context
             idx = 0
@@ -76,8 +81,10 @@ class Collate_fn:
                 idx += 1
             context_end = idx - 1
 
+            context_position += [(context_start, context_end)]
+
             # If the answer is not fully inside the context, label it (0, 0)
-            if offset[context_start][0] > end_char or offset[context_end][1] < start_char:
+            if offset[context_start][0] > start_char or offset[context_end][1] < end_char:
                 start_positions.append(0)
                 end_positions.append(0)
             else:
@@ -94,4 +101,5 @@ class Collate_fn:
 
         inputs["start_positions"] = torch.tensor(start_positions)
         inputs["end_positions"] = torch.tensor(end_positions)
+        inputs["context_position"] = context_position
         return inputs

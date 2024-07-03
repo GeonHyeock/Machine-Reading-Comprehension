@@ -1,11 +1,11 @@
 from typing import Any, Dict, Tuple
 from lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
-from torchmetrics.classification.accuracy import Accuracy
-from collections import Counter
+from collections import Counter, defaultdict
 import re
 import string
 import torch
+import numpy as np
 
 
 class SolarModule(LightningModule):
@@ -48,18 +48,47 @@ class SolarModule(LightningModule):
         self.val_f1.reset()
         self.val_f1_best.reset()
 
+    def post_process(self, logit, batch, n_best=20, max_answer_length=30):
+        best_answer = defaultdict(list)
+        start_logit = logit["start_logits"].detach().cpu()
+        end_logit = logit["end_logits"].detach().cpu()
+        idx = 0
+        for start_indexes, end_indexes, context_position, input_ids, id in zip(
+            np.argsort(-start_logit)[:, :n_best],
+            np.argsort(-end_logit)[:, :n_best],
+            batch["context_position"],
+            batch["input_ids"].detach().cpu(),
+            [batch["id"][idx] for idx in batch["overflow_to_sample_mapping"]],
+        ):
+            for start_index in start_indexes:
+                for end_index in end_indexes:
+                    if context_position[0] <= start_index and context_position[1] >= end_index:
+                        continue
+                    # 길이가 음수이거나 max_answer_length보다 크면 스킵
+                    if end_index < start_index or end_index - start_index + 1 > max_answer_length:
+                        continue
+
+                    best_answer[id].append(
+                        {
+                            "input_ids": input_ids,
+                            "logit_score": start_logit[idx][start_index] + end_logit[idx][end_index],
+                        }
+                    )
+
+        return {k: max(v, key=lambda x: x["logit_score"]) for k, v in best_answer.items()}
+
     def model_step(self, batch: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         x = {k: batch[k] for k in ["input_ids", "attention_mask"]}
         logits = self.forward(x)
         loss = self.criterion(logits, batch)
 
-        start_pred = logits["start_logits"].argmax(dim=-1)
-        end_pred = logits["end_logits"].argmax(dim=-1)
-        preds = [
-            self.net.tokenizer.decode(x[s:e], skip_special_tokens=True)
-            for x, s, e in zip(batch["input_ids"].detach().cpu(), start_pred.detach().cpu(), end_pred.detach().cpu())
+        preds = self.post_process(logits, batch)
+        pred_answer = [
+            self.net.tokenizer.decode(preds.get(id, {"input_ids": 0})["input_ids"], skip_special_tokens=True)
+            for id in batch["id"]
         ]
-        return loss, preds, [answer["text"][0] for answer in batch["answers"]]
+
+        return loss, pred_answer, [answer["text"][0] for answer in batch["answers"]]
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> torch.Tensor:
         loss, preds, targets = self.model_step(batch)
