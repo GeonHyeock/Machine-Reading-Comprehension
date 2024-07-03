@@ -85,10 +85,7 @@ class SolarModule(LightningModule):
         loss = self.criterion(logits, batch)
 
         preds = self.post_process(logits, batch)
-        pred_answer = [
-            self.net.tokenizer.decode(preds.get(id, {"input_ids": 0})["input_ids"], skip_special_tokens=True)
-            for id in batch["id"]
-        ]
+        pred_answer = [self.net.tokenizer.decode(pred.get("input_ids", 0), skip_special_tokens=True) for pred in preds]
 
         return loss, pred_answer, [answer["text"][0] for answer in batch["answers"]]
 
