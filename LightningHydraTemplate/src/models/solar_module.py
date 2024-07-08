@@ -6,6 +6,7 @@ import re
 import string
 import torch
 import numpy as np
+import pandas as pd
 
 
 class SolarModule(LightningModule):
@@ -30,15 +31,15 @@ class SolarModule(LightningModule):
         # metric objects for calculating and averaging accuracy across batches
         self.train_f1 = MeanMetric()
         self.val_f1 = MeanMetric()
-        self.test_f1 = MeanMetric()
 
         # for averaging loss across batches
         self.train_loss = MeanMetric()
         self.val_loss = MeanMetric()
-        self.test_loss = MeanMetric()
 
         # for tracking best so far validation accuracy
         self.val_f1_best = MaxMetric()
+
+        self.test_result = defaultdict(list)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
@@ -48,10 +49,10 @@ class SolarModule(LightningModule):
         self.val_f1.reset()
         self.val_f1_best.reset()
 
-    def post_process(self, logit, batch, n_best=20, max_answer_length=30):
-        best_answer, answer = [], []
-        start_logit = logit["start_logits"].detach().cpu()
-        end_logit = logit["end_logits"].detach().cpu()
+    def post_process(self, logit, batch, n_best=20, max_answer_length=100):
+        best_answer = []
+        start_logit = torch.softmax(logit["start_logits"].detach().cpu(), dim=1)
+        end_logit = torch.softmax(logit["end_logits"].detach().cpu(), dim=1)
         idx = 0
         for start_indexes, end_indexes, context_position, input_ids, id in zip(
             np.argsort(-start_logit)[:, :n_best],
@@ -60,22 +61,27 @@ class SolarModule(LightningModule):
             batch["input_ids"].detach().cpu(),
             [batch["id"][idx] for idx in batch["overflow_to_sample_mapping"]],
         ):
+            answer = []
             for start_index in start_indexes:
                 for end_index in end_indexes:
-                    if context_position[0] <= start_index and context_position[1] >= end_index:
-                        continue
-                    # 길이가 음수이거나 max_answer_length보다 크면 스킵
-                    if end_index < start_index or end_index - start_index + 1 > max_answer_length:
-                        continue
 
-                    answer.append(
-                        {
-                            "input_ids": input_ids,
-                            "logit_score": start_logit[idx][start_index] + end_logit[idx][end_index],
-                        }
-                    )
+                    if not (
+                        end_index < start_index
+                        or context_position[0] > start_index
+                        or context_position[1] < end_index
+                        or end_index - start_index + 1 > max_answer_length
+                    ):
+                        answer.append(
+                            {
+                                "id": id,
+                                "input_ids": input_ids[start_index : end_index + 1],
+                                "logit_score": start_logit[idx][start_index] + end_logit[idx][end_index],
+                            }
+                        )
             best_answer.append(
-                {ans["input_ids"]: max(ans["logit_score"], key=lambda x: x["logit_score"]) for ans in best_answer.items()}
+                max(answer, key=lambda x: x["logit_score"])
+                if answer
+                else {"id": id, "input_ids": input_ids[0], "logit_score": -1}
             )
         return best_answer
 
@@ -87,7 +93,14 @@ class SolarModule(LightningModule):
         preds = self.post_process(logits, batch)
         pred_answer = [self.net.tokenizer.decode(pred.get("input_ids", 0), skip_special_tokens=True) for pred in preds]
 
-        return loss, pred_answer, [answer["text"][0] for answer in batch["answers"]]
+        return loss, pred_answer, [answer[0]["text"][0] for answer in batch["answers"]]
+
+    def test_model_step(self, batch: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        x = {k: batch[k] for k in ["input_ids", "attention_mask"]}
+        logits = self.forward(x)
+        preds = self.post_process(logits, batch)
+
+        return preds
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> torch.Tensor:
         loss, preds, targets = self.model_step(batch)
@@ -96,6 +109,7 @@ class SolarModule(LightningModule):
         self.train_loss(loss)
         f1 = f1_score(preds, targets)
         self.train_f1(f1)
+        self.log("train/lr", self.trainer.optimizers[0].param_groups[0]["lr"], on_step=True, on_epoch=True, prog_bar=False)
         self.log("train/loss", self.train_loss, on_step=True, on_epoch=True, prog_bar=True)
         self.log("train/f1", self.train_f1, on_step=True, on_epoch=True, prog_bar=True)
 
@@ -121,16 +135,14 @@ class SolarModule(LightningModule):
         self.log("val/f1_best", self.val_f1_best.compute(), sync_dist=True, prog_bar=True)
 
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
-        loss, preds, targets = self.model_step(batch)
-
-        # update and log metrics
-        self.test_loss(loss)
-        self.test_f1(preds, targets)
-        self.log("test/loss", self.test_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("test/f1", self.test_f1, on_step=False, on_epoch=True, prog_bar=True)
+        preds = self.test_model_step(batch)
+        for pred in preds:
+            self.test_result["id"].append(pred["id"][0])
+            self.test_result["logit_score"].append(float(pred["logit_score"]))
+            self.test_result["answer"].append(self.net.tokenizer.decode(pred.get("input_ids", 0), skip_special_tokens=True))
 
     def on_test_epoch_end(self) -> None:
-        pass
+        pd.DataFrame(self.test_result).to_csv("result.csv", index=False)
 
     def setup(self, stage: str) -> None:
         if self.hparams.compile and stage == "fit":

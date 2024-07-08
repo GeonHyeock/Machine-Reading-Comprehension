@@ -23,9 +23,9 @@ class SOLAR(nn.Module):
                 if ((isinstance(module, nn.Linear) or isinstance(module, nn.Conv1d))) and any([m in name for m in lora_module])
             ]
             lora_config = LoraConfig(
-                lora_alpha=2,
-                lora_dropout=0.1,
-                r=2,
+                lora_alpha=8,
+                lora_dropout=0.2,
+                r=16,
                 bias="lora_only",
                 target_modules=lora_target,
             )
@@ -42,10 +42,8 @@ class QaOutput(nn.Module):
         super().__init__()
         self.classifier = nn.Sequential(
             *[
-                nn.Dropout(0.1),
-                nn.Linear(hidden_size, hidden_size // 8),
-                nn.SiLU(),
-                nn.Linear(hidden_size // 8, 2),
+                nn.Dropout(0.5),
+                nn.Linear(hidden_size, 2, bias=False),
             ]
         )
 
