@@ -1,4 +1,5 @@
 from torch.utils.data import Dataset
+from src.models.solar_module import normalize_answer
 import pandas as pd
 import torch
 import json
@@ -28,10 +29,12 @@ class MyDataset(Dataset):
                     sub_data = {k: v[i].tolist() for k, v in preprocess_data.items()}
                     sub_data.update(data)
                     if not sub_data["start_positions"] == sub_data["end_positions"]:
-                        if sub_data["answers"][0]["text"][0] == tokenizer.decode(
+                        text = sub_data["answers"][0]["text"][0]
+                        decode_text = self.tokenizer.decode(
                             sub_data["input_ids"][sub_data["start_positions"] : sub_data["end_positions"] + 1]
-                        ):
-                            with open(os.path.join(data_folder_path, dtype, f"{idx}.json"), "w") as f:
+                        )
+                        if normalize_answer(text) == normalize_answer(decode_text):
+                            with open(os.path.join(data_folder_path, dtype, f"{idx}.json"), "w", encoding="utf-8") as f:
                                 json.dump(sub_data, f, indent=4)
                                 idx += 1
 
@@ -39,7 +42,7 @@ class MyDataset(Dataset):
         return len(os.listdir(self.path))
 
     def __getitem__(self, idx):
-        return json.load(open(os.path.join(self.path, f"{idx//10}.json"), "r"))
+        return json.load(open(os.path.join(self.path, f"{idx}.json"), "r"))
 
     def preprocess_function(self, raw_text, max_length=384, stride=128):
         inputs = self.tokenizer(
@@ -107,7 +110,6 @@ class Collate_fn:
 
     def __call__(self, batch):
         data = pd.DataFrame(batch)
-
         return {
             "input_ids": torch.tensor(data["input_ids"]),
             "attention_mask": torch.tensor(data["attention_mask"]),
