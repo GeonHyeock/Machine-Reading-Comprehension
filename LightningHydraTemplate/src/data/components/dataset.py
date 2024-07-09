@@ -18,25 +18,42 @@ class MyDataset(Dataset):
             os.makedirs(self.path)
             idx = 0
             for _, data in self.df.iterrows():
-                data = {
-                    "id": [data.id],
-                    "context": [data.context],
-                    "question": ["<|start_header_id|>user<|end_header_id|>" + data.question],
-                    "answers": [{"text": [data.answer], "answer_start": [data.context.find(data.answer)]}],
-                }
+                if self.dtype == "test":
+                    data = {
+                        "id": [data.id],
+                        "context": [data.context],
+                        "question": ["<|start_header_id|>user<|end_header_id|>" + data.question],
+                        "answers": [{"text": [""], "answer_start": [0]}],
+                    }
+                else:
+                    data = {
+                        "id": [data.id],
+                        "context": [data.context],
+                        "question": ["<|start_header_id|>user<|end_header_id|>" + data.question],
+                        "answers": [{"text": [data.answer], "answer_start": [data.context.find(data.answer)]}],
+                    }
+
                 preprocess_data = self.preprocess_function(data)
                 for i in range(len(preprocess_data["start_positions"])):
                     sub_data = {k: v[i].tolist() for k, v in preprocess_data.items()}
                     sub_data.update(data)
-                    if not sub_data["start_positions"] == sub_data["end_positions"]:
-                        text = sub_data["answers"][0]["text"][0]
-                        decode_text = self.tokenizer.decode(
-                            sub_data["input_ids"][sub_data["start_positions"] : sub_data["end_positions"] + 1]
-                        )
-                        if normalize_answer(text) == normalize_answer(decode_text):
-                            with open(os.path.join(data_folder_path, dtype, f"{idx}.json"), "w", encoding="utf-8") as f:
-                                json.dump(sub_data, f, indent=4)
-                                idx += 1
+                    if self.dtype == "test":
+                        with open(os.path.join(data_folder_path, dtype, f"{idx}.json"), "w", encoding="utf-8") as f:
+                            json.dump(sub_data, f, indent=4)
+                            idx += 1
+
+                    else:
+                        if not sub_data["start_positions"] == sub_data["end_positions"]:
+                            text = sub_data["answers"][0]["text"][0]
+                            decode_text = self.tokenizer.decode(
+                                sub_data["input_ids"][sub_data["start_positions"] : sub_data["end_positions"] + 1]
+                            )
+                            if normalize_answer(text) == normalize_answer(decode_text):
+                                with open(os.path.join(data_folder_path, dtype, f"{idx}.json"), "w", encoding="utf-8") as f:
+                                    json.dump(sub_data, f, indent=4)
+                                    idx += 1
+                            else:
+                                pass
 
     def __len__(self):
         return len(os.listdir(self.path))

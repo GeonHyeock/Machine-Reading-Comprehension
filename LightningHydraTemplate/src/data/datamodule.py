@@ -30,7 +30,7 @@ class DataModule(LightningDataModule):
         train_df, valid_df = train_df.iloc[: int(len(train_df) * 0.8)].reset_index(drop=True), train_df.iloc[
             int(len(train_df) * 0.8) :
         ].reset_index(drop=True)
-        test_df = pd.read_csv(os.path.join(data_dir, text_folder, "train.csv"))
+        test_df = pd.read_csv(os.path.join(data_dir, text_folder, "test.csv"))
 
         data_dir = os.path.join(data_dir, text_folder)
         # dataset
