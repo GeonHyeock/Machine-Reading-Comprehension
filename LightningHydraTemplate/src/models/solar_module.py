@@ -93,7 +93,7 @@ class SolarModule(LightningModule):
         preds = self.post_process(logits, batch)
         pred_answer = [self.net.tokenizer.decode(pred.get("input_ids", 0), skip_special_tokens=True) for pred in preds]
 
-        return loss, pred_answer, [answer[0]["text"][0] for answer in batch["answers"]]
+        return loss, pred_answer, [answer[0] for answer in batch["answers"]]
 
     def test_model_step(self, batch: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         x = {k: batch[k] for k in ["input_ids", "attention_mask"]}
