@@ -59,7 +59,7 @@ class SolarModule(LightningModule):
             np.argsort(-end_logit)[:, :n_best],
             batch["context_position"],
             batch["input_ids"].detach().cpu(),
-            [batch["id"][idx] for idx in batch["overflow_to_sample_mapping"]],
+            [batch["id"][idx][0] for idx in range(len(batch["id"]))],
         ):
             answer = []
             for start_index in start_indexes:
