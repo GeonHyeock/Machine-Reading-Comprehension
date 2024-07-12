@@ -26,7 +26,7 @@ class DataModule(LightningDataModule):
         # dataframe
         train_df = pd.read_csv(os.path.join(data_dir, text_folder, "train.csv"))
         train_df = train_df[train_df.apply(lambda x: x.answer in x.context, axis=1)]
-        train_df = train_df.sample(frac=1).reset_index(drop=True)
+        train_df = train_df.sample(frac=1, random_state=980801).reset_index(drop=True)
         train_df, valid_df = train_df.iloc[: int(len(train_df) * 0.8)].reset_index(drop=True), train_df.iloc[
             int(len(train_df) * 0.8) :
         ].reset_index(drop=True)

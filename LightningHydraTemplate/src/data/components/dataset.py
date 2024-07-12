@@ -1,5 +1,6 @@
 from torch.utils.data import Dataset
 from src.models.solar_module import normalize_answer
+from tqdm import tqdm
 import pandas as pd
 import torch
 import json
@@ -14,25 +15,17 @@ class MyDataset(Dataset):
         self.data_folder_path = data_folder_path
         self.dtype = dtype
 
+        remove_id, use_id = [], []
         if not os.path.isdir(self.path):
             os.makedirs(self.path)
             idx = 0
-            for _, data in self.df.iterrows():
-                if self.dtype == "test":
-                    data = {
-                        "id": [data.id],
-                        "context": [data.context],
-                        "question": ["<|start_header_id|>user<|end_header_id|>" + data.question],
-                        "answers": [{"text": [""], "answer_start": [0]}],
-                    }
-                else:
-                    data = {
-                        "id": [data.id],
-                        "context": [data.context],
-                        "question": ["<|start_header_id|>user<|end_header_id|>" + data.question],
-                        "answers": [{"text": [data.answer], "answer_start": [data.context.find(data.answer)]}],
-                    }
-
+            for _, data in tqdm(self.df.iterrows(), total=len(self.df), desc=f"{self.dtype} data preprocess"):
+                data = {
+                    "id": [data.id],
+                    "context": [data.context],
+                    "question": [data.question],
+                    "answers": ["" if self.dtype == "test" else data.answer],
+                }
                 preprocess_data = self.preprocess_function(data)
                 for i in range(len(preprocess_data["start_positions"])):
                     sub_data = {k: v[i].tolist() for k, v in preprocess_data.items()}
@@ -43,17 +36,19 @@ class MyDataset(Dataset):
                             idx += 1
 
                     else:
-                        if not sub_data["start_positions"] == sub_data["end_positions"]:
-                            text = sub_data["answers"][0]["text"][0]
-                            decode_text = self.tokenizer.decode(
-                                sub_data["input_ids"][sub_data["start_positions"] : sub_data["end_positions"] + 1]
-                            )
+                        if sub_data["start_positions"] != sub_data["end_positions"]:
+                            text = sub_data["answers"][0]
+                            decode_text = sub_data["input_ids"][sub_data["start_positions"] : sub_data["end_positions"] + 1]
+                            decode_text = self.tokenizer.decode(decode_text)
                             if normalize_answer(text) == normalize_answer(decode_text):
                                 with open(os.path.join(data_folder_path, dtype, f"{idx}.json"), "w", encoding="utf-8") as f:
                                     json.dump(sub_data, f, indent=4)
                                     idx += 1
-                            else:
-                                pass
+                                    use_id += sub_data["id"]
+                        else:
+                            remove_id += sub_data["id"]
+            remove_id = list(set(remove_id) - set(use_id))
+            pd.DataFrame(remove_id).to_csv(os.path.join(data_folder_path, f"{dtype}_remove.csv"), index=False)
 
     def __len__(self):
         return len(os.listdir(self.path))
@@ -68,24 +63,13 @@ class MyDataset(Dataset):
             max_length=max_length,
             stride=stride,
             truncation="only_second",
-            return_offsets_mapping=True,
             return_overflowing_tokens=True,
             padding="max_length",
             return_tensors="pt",
         )
 
-        offset_mapping = inputs.pop("offset_mapping")
-        overflow_to_sample_mapping = inputs["overflow_to_sample_mapping"]
-        answers = raw_text["answers"]
-        start_positions = []
-        end_positions = []
-        context_position = []
-
-        for i, offset in enumerate(offset_mapping):
-            example_index = overflow_to_sample_mapping[i]
-            answer = answers[example_index]
-            start_char = answer["answer_start"][0]
-            end_char = answer["answer_start"][0] + len(answer["text"][0])
+        start_positions, end_positions, context_position = [], [], []
+        for i, input_ids in enumerate(inputs["input_ids"]):
             sequence_ids = inputs.sequence_ids(i) + [None]
 
             # Find the start and end of the context
@@ -96,29 +80,29 @@ class MyDataset(Dataset):
             while sequence_ids[idx] == 1:
                 idx += 1
             context_end = idx - 1
-
             context_position += [(context_start, context_end)]
 
-            # If the answer is not fully inside the context, label it (0, 0)
-            if offset[context_start][0] > start_char or offset[context_end][1] < end_char:
-                start_positions.append(0)
-                end_positions.append(0)
-            else:
-                # Otherwise it's the start and end token positions
-                idx = context_start
-                while idx <= context_end and offset[idx][0] <= start_char:
-                    idx += 1
-                start_positions.append(idx - 1)
+            start, end = self.start_end(raw_text["answers"][0], input_ids, context_start, context_end)
+            if start == 0 and end == 0:
+                start, end = self.start_end(" " + raw_text["answers"][0], input_ids, context_start, context_end)
 
-                idx = context_end
-                while idx >= context_start and offset[idx][1] >= end_char:
-                    idx -= 1
-                end_positions.append(idx + 1)
+            start_positions.append(start)
+            end_positions.append(end)
 
         inputs["start_positions"] = torch.tensor(start_positions)
         inputs["end_positions"] = torch.tensor(end_positions)
         inputs["context_position"] = torch.tensor(context_position)
         return inputs
+
+    def start_end(self, text, input_ids, context_start, context_end):
+        start, end = 0, 0
+        answer = torch.tensor(self.tokenizer(text)["input_ids"][1:])
+        answer_length = len(answer)
+        for idx in range(context_start, context_end - answer_length):
+            if (input_ids[idx : idx + answer_length] == answer).all():
+                start = idx
+                end = idx + answer_length - 1
+        return start, end
 
 
 class Collate_fn:
@@ -130,7 +114,6 @@ class Collate_fn:
         return {
             "input_ids": torch.tensor(data["input_ids"]),
             "attention_mask": torch.tensor(data["attention_mask"]),
-            "overflow_to_sample_mapping": data["overflow_to_sample_mapping"],
             "start_positions": torch.tensor(data["start_positions"]),
             "end_positions": torch.tensor(data["end_positions"]),
             "context_position": data["context_position"],
