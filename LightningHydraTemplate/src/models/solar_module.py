@@ -119,7 +119,10 @@ class SolarModule(LightningModule):
         return loss
 
     def on_train_epoch_end(self) -> None:
-        pass
+        if self.current_epoch == 2:
+            for name, param in self.net.model.named_parameters():
+                if "embeddings." not in name:
+                    param.requires_grad = True
 
     def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
         loss, preds, targets = self.model_step(batch)

@@ -14,8 +14,7 @@ class SOLAR(nn.Module):
         self.tokenizer = AutoTokenizer.from_pretrained(name)
         self.model = AutoModel.from_pretrained(name, add_pooling_layer=False)
         for name, param in self.model.named_parameters():
-            if "embeddings" in name:
-                param.requires_grad = False
+            param.requires_grad = False
         self.qa_output = QaOutput(1024)
 
         if lora_module:
