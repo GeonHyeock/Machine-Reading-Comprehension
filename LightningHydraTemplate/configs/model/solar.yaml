@@ -3,20 +3,28 @@ _target_: src.models.solar_module.SolarModule
 optimizer:
   _target_: torch.optim.AdamW
   _partial_: true
-  lr: 0.0001
+  lr: 0.001
 
 
 scheduler:
-  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+  _target_: cosine_annealing_warmup.CosineAnnealingWarmupRestarts
   _partial_: true
-  mode: min
-  factor: 0.1
-  patience: 3
+  first_cycle_steps: 20000 
+  cycle_mult: 1.0
+  max_lr: 1e-5
+  min_lr: 1e-8
+  warmup_steps: 5000
+  gamma: 0.975
+
+scheduler_monitor:
+  monitor: "train/loss"
+  interval: "step"
+  frequency: 1
 
 net:
   _target_: src.models.components.solar.SOLAR
-  name: "beomi/Llama-3-Open-Ko-8B-Instruct-preview"
-  lora_module: ["self_attn.q_proj", "self_attn.k_proj"]
+  name: "klue/roberta-large"
+  lora_module: []
 
 # compile model for faster training with pytorch 2.0
 compile: false
