@@ -82,7 +82,7 @@ class MyDataset(Dataset):
             context_end = idx - 1
             context_position += [(context_start, context_end)]
             inputs["token_type_ids"][i] = torch.zeros(max_length)
-            inputs["token_type_ids"][i][context_start:context_end+1] = 1
+            inputs["token_type_ids"][i][context_start : context_end + 1] = 1
 
             start, end = self.start_end(raw_text["answers"][0], input_ids, context_start, context_end)
             if start == 0 and end == 0:
