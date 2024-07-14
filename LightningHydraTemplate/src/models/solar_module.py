@@ -16,6 +16,7 @@ class SolarModule(LightningModule):
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
         compile: bool,
+        scheduler_monitor: dict,
     ) -> None:
         super().__init__()
 
@@ -49,22 +50,23 @@ class SolarModule(LightningModule):
         self.val_f1.reset()
         self.val_f1_best.reset()
 
-    def post_process(self, logit, batch, n_best=20, max_answer_length=100):
+    def post_process(self, logit, batch, n_best=20, max_answer_length=40):
         best_answer = []
         start_logit = torch.softmax(logit["start_logits"].detach().cpu(), dim=1)
         end_logit = torch.softmax(logit["end_logits"].detach().cpu(), dim=1)
-        idx = 0
-        for start_indexes, end_indexes, context_position, input_ids, id in zip(
-            np.argsort(-start_logit)[:, :n_best],
-            np.argsort(-end_logit)[:, :n_best],
-            batch["context_position"],
-            batch["input_ids"].detach().cpu(),
-            [batch["id"][idx][0] for idx in range(len(batch["id"]))],
+        for idx, zips in enumerate(
+            zip(
+                np.argsort(-start_logit)[:, :n_best],
+                np.argsort(-end_logit)[:, :n_best],
+                batch["context_position"],
+                batch["input_ids"].detach().cpu(),
+                [batch["id"][idx][0] for idx in range(len(batch["id"]))],
+            )
         ):
+            start_indexes, end_indexes, context_position, input_ids, id = zips
             answer = []
             for start_index in start_indexes:
                 for end_index in end_indexes:
-
                     if not (
                         end_index < start_index
                         or context_position[0] > start_index
@@ -109,7 +111,7 @@ class SolarModule(LightningModule):
         self.train_loss(loss)
         f1 = f1_score(preds, targets)
         self.train_f1(f1)
-        self.log("train/lr", self.trainer.optimizers[0].param_groups[0]["lr"], on_step=True, on_epoch=True, prog_bar=False)
+        self.log("train/lr", self.trainer.optimizers[0].param_groups[0]["lr"], on_step=True, prog_bar=False)
         self.log("train/loss", self.train_loss, on_step=True, on_epoch=True, prog_bar=True)
         self.log("train/f1", self.train_f1, on_step=True, on_epoch=True, prog_bar=True)
 
@@ -156,9 +158,9 @@ class SolarModule(LightningModule):
                 "optimizer": optimizer,
                 "lr_scheduler": {
                     "scheduler": scheduler,
-                    "monitor": "val/loss",
-                    "interval": "epoch",
-                    "frequency": 1,
+                    "monitor": self.hparams.scheduler_monitor.monitor,
+                    "interval": self.hparams.scheduler_monitor.interval,
+                    "frequency": self.hparams.scheduler_monitor.frequency,
                 },
             }
         return {"optimizer": optimizer}
@@ -167,7 +169,7 @@ class SolarModule(LightningModule):
 class MyLoss(torch.nn.Module):
     def __init__(self):
         super(MyLoss, self).__init__()
-        self.criterion = torch.nn.CrossEntropyLoss()
+        self.criterion = torch.nn.CrossEntropyLoss(ignore_index=1)
 
     def forward(self, logits, batch):
         start_loss = self.criterion(logits["start_logits"], batch["start_positions"])

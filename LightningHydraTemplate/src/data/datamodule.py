@@ -35,7 +35,6 @@ class DataModule(LightningDataModule):
         data_dir = os.path.join(data_dir, text_folder)
         # dataset
         self.tokenizer = AutoTokenizer.from_pretrained(name, padding_side="right")
-        self.tokenizer.pad_token = self.tokenizer.eos_token
         self.data_train: Dataset = MyDataset(train_df, self.tokenizer, data_dir, "train")
         self.data_val: Dataset = MyDataset(valid_df, self.tokenizer, data_dir, "valid")
         self.data_test: Dataset = MyDataset(test_df, self.tokenizer, data_dir, "test")

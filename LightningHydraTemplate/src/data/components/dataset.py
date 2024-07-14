@@ -70,7 +70,7 @@ class MyDataset(Dataset):
 
         start_positions, end_positions, context_position = [], [], []
         for i, input_ids in enumerate(inputs["input_ids"]):
-            sequence_ids = inputs.sequence_ids(i) + [None]
+            sequence_ids = inputs.sequence_ids(i)
 
             # Find the start and end of the context
             idx = 0
@@ -81,6 +81,8 @@ class MyDataset(Dataset):
                 idx += 1
             context_end = idx - 1
             context_position += [(context_start, context_end)]
+            inputs["token_type_ids"][i] = torch.zeros(max_length)
+            inputs["token_type_ids"][i][context_start:context_end+1] = 1
 
             start, end = self.start_end(raw_text["answers"][0], input_ids, context_start, context_end)
             if start == 0 and end == 0:
@@ -96,7 +98,7 @@ class MyDataset(Dataset):
 
     def start_end(self, text, input_ids, context_start, context_end):
         start, end = 0, 0
-        answer = torch.tensor(self.tokenizer(text)["input_ids"][1:])
+        answer = torch.tensor(self.tokenizer(text)["input_ids"][1:-1])
         answer_length = len(answer)
         for idx in range(context_start, context_end - answer_length):
             if (input_ids[idx : idx + answer_length] == answer).all():
@@ -113,6 +115,7 @@ class Collate_fn:
         data = pd.DataFrame(batch)
         return {
             "input_ids": torch.tensor(data["input_ids"]),
+            "token_type_ids": torch.tensor(data["token_type_ids"]),
             "attention_mask": torch.tensor(data["attention_mask"]),
             "start_positions": torch.tensor(data["start_positions"]),
             "end_positions": torch.tensor(data["end_positions"]),

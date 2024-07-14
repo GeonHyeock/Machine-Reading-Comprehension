@@ -12,9 +12,11 @@ class SOLAR(nn.Module):
     ) -> None:
         super(SOLAR, self).__init__()
         self.tokenizer = AutoTokenizer.from_pretrained(name)
-        self.tokenizer.pad_token = self.tokenizer.eos_token
-        self.model = AutoModel.from_pretrained(name)
-        self.qa_output = QaOutput(4096)
+        self.model = AutoModel.from_pretrained(name, add_pooling_layer=False)
+        for name, param in self.model.named_parameters():
+            if "embeddings" in name:
+                param.requires_grad = False
+        self.qa_output = QaOutput(1024)
 
         if lora_module:
             lora_target = [
@@ -42,7 +44,6 @@ class QaOutput(nn.Module):
         super().__init__()
         self.classifier = nn.Sequential(
             *[
-                nn.Dropout(0.5),
                 nn.Linear(hidden_size, 2, bias=False),
             ]
         )
