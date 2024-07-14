@@ -16,6 +16,8 @@ class DataModule(LightningDataModule):
         pin_memory: bool = False,
         text_folder: str = "",
         name: str = "",
+        train_context_id: list = [0, 1, 2, 3, 4, 5, 6, 7],
+        valid_context_id: list = [8, 9],
     ) -> None:
         super().__init__()
 
@@ -25,11 +27,9 @@ class DataModule(LightningDataModule):
 
         # dataframe
         train_df = pd.read_csv(os.path.join(data_dir, text_folder, "train.csv"))
-        train_df = train_df[train_df.apply(lambda x: x.answer in x.context, axis=1)]
-        train_df = train_df.sample(frac=1, random_state=980801).reset_index(drop=True)
-        train_df, valid_df = train_df.iloc[: int(len(train_df) * 0.8)].reset_index(drop=True), train_df.iloc[
-            int(len(train_df) * 0.8) :
-        ].reset_index(drop=True)
+        train_idx = train_df.context_id.apply(lambda x: x % 10 in train_context_id)
+        valid_idx = train_df.context_id.apply(lambda x: x % 10 in valid_context_id)
+        train_df, valid_df = train_df[train_idx].reset_index(drop=True), train_df[valid_idx].reset_index(drop=True)
         test_df = pd.read_csv(os.path.join(data_dir, text_folder, "test.csv"))
 
         data_dir = os.path.join(data_dir, text_folder)
