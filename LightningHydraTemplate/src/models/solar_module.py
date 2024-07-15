@@ -122,7 +122,7 @@ class SolarModule(LightningModule):
         return loss
 
     def on_train_epoch_end(self) -> None:
-        if self.current_epoch == 2:
+        if self.current_epoch == self.hparams.scheduler.keywords["start_epoch"] - 1:
             for name, param in self.net.model.named_parameters():
                 if "embeddings." not in name:
                     param.requires_grad = True

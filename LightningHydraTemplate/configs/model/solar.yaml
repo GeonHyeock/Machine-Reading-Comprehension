@@ -7,14 +7,16 @@ optimizer:
 
 
 scheduler:
-  _target_: cosine_annealing_warmup.CosineAnnealingWarmupRestarts
+  _target_: src.models.components.pytorch_cosine_annealing_with_warmup.cosine_annealing_warmup.scheduler.CosineAnnealingWarmupRestarts
   _partial_: true
-  first_cycle_steps: 20000 
+  first_cycle_steps: 6826 
   cycle_mult: 1.0
-  max_lr: 1e-5
+  max_lr: 1e-6
   min_lr: 1e-8
-  warmup_steps: 5000
-  gamma: 0.975
+  warmup_steps: 1826
+  gamma: 0.995
+  start_epoch: 3
+  base_lr: 5e-5
 
 scheduler_monitor:
   monitor: "train/loss"
