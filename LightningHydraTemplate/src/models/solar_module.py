@@ -2,7 +2,10 @@ from typing import Any, Dict, Tuple
 from lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
 from collections import Counter, defaultdict
+from datetime import datetime
+from pytz import timezone
 import re
+import os
 import string
 import torch
 import numpy as np
@@ -142,12 +145,17 @@ class SolarModule(LightningModule):
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
         preds = self.test_model_step(batch)
         for pred in preds:
-            self.test_result["id"].append(pred["id"][0])
+            self.test_result["id"].append(pred["id"])
             self.test_result["logit_score"].append(float(pred["logit_score"]))
             self.test_result["answer"].append(self.net.tokenizer.decode(pred.get("input_ids", 0), skip_special_tokens=True))
 
     def on_test_epoch_end(self) -> None:
-        pd.DataFrame(self.test_result).to_csv("result.csv", index=False)
+        self.test_result = pd.DataFrame(self.test_result)
+        idx = self.test_result.groupby("id")["logit_score"].idxmax()
+
+        self.test_result = self.test_result.iloc[idx]
+        now = "_".join(str(datetime.now(timezone("Asia/Seoul"))).split(".")[0].split(" "))
+        self.test_result.to_csv(os.path.join("data", f"{now}_result.csv"), index=False)
 
     def setup(self, stage: str) -> None:
         if self.hparams.compile and stage == "fit":
