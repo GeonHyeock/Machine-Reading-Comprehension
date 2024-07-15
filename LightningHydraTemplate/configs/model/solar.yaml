@@ -11,7 +11,7 @@ scheduler:
   _partial_: true
   first_cycle_steps: 6826 
   cycle_mult: 1.0
-  max_lr: 1e-6
+  max_lr: 1e-5
   min_lr: 1e-8
   warmup_steps: 1826
   gamma: 0.995
