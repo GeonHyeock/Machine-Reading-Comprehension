@@ -1,5 +1,5 @@
 from torch.utils.data import Dataset
-from src.models.solar_module import normalize_answer
+from src.models.roberta_module import normalize_answer
 from tqdm import tqdm
 import pandas as pd
 import torch

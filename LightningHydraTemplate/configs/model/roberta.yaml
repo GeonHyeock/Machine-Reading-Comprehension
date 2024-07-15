@@ -1,4 +1,4 @@
-_target_: src.models.solar_module.SolarModule
+_target_: src.models.roberta_module.RobertaModule
 
 optimizer:
   _target_: torch.optim.AdamW
@@ -24,9 +24,8 @@ scheduler_monitor:
   frequency: 1
 
 net:
-  _target_: src.models.components.solar.SOLAR
+  _target_: src.models.components.roberta.Roberta
   name: "klue/roberta-large"
-  lora_module: []
 
 # compile model for faster training with pytorch 2.0
 compile: false

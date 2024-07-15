@@ -1,36 +1,19 @@
 import torch
 from torch import nn
 from transformers import AutoTokenizer, AutoModel
-from peft import inject_adapter_in_model, LoraConfig
 
 
-class SOLAR(nn.Module):
+class Roberta(nn.Module):
     def __init__(
         self,
-        name="upstage/SOLAR-10.7B-Instruct-v1.0",
-        lora_module=["self_attn.q_proj", "self_attn.v_proj", "self_attn.k_proj", "self_attn.o_proj"],
+        name: str = "klue/roberta-large",
     ) -> None:
-        super(SOLAR, self).__init__()
+        super(Roberta, self).__init__()
         self.tokenizer = AutoTokenizer.from_pretrained(name)
         self.model = AutoModel.from_pretrained(name, add_pooling_layer=False)
         for name, param in self.model.named_parameters():
             param.requires_grad = False
         self.qa_output = QaOutput(1024)
-
-        if lora_module:
-            lora_target = [
-                name
-                for name, module in self.model.named_modules()
-                if ((isinstance(module, nn.Linear) or isinstance(module, nn.Conv1d))) and any([m in name for m in lora_module])
-            ]
-            lora_config = LoraConfig(
-                lora_alpha=8,
-                lora_dropout=0.2,
-                r=16,
-                bias="lora_only",
-                target_modules=lora_target,
-            )
-            self.model = inject_adapter_in_model(lora_config, self.model)
 
     def forward(self, x) -> torch.Tensor:
         output = self.model(**x)
@@ -56,5 +39,5 @@ class QaOutput(nn.Module):
 
 
 if __name__ == "__main__":
-    net = SOLAR()
+    net = Roberta()
     print("hi")

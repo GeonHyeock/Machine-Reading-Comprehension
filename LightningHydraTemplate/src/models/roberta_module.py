@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 
-class SolarModule(LightningModule):
+class RobertaModule(LightningModule):
     def __init__(
         self,
         net: torch.nn.Module,
