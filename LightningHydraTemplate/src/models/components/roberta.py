@@ -7,28 +7,66 @@ class Roberta(nn.Module):
     def __init__(
         self,
         name: str = "klue/roberta-large",
+        hidden_state: int = 1024,
+        is_ensemble: bool = False,
     ) -> None:
         super(Roberta, self).__init__()
         self.tokenizer = AutoTokenizer.from_pretrained(name)
-        self.model = AutoModel.from_pretrained(name, add_pooling_layer=False)
+        self.is_ensemble = is_ensemble
+
+        if is_ensemble:
+            self.model = Ensemble()
+        else:
+            self.model = AutoModel.from_pretrained(name, add_pooling_layer=False)
+
         for name, param in self.model.named_parameters():
             param.requires_grad = False
-        self.qa_output = QaOutput(1024)
+
+        self.qa_output = QaOutput(hidden_state, is_ensemble)
 
     def forward(self, x) -> torch.Tensor:
         output = self.model(**x)
-        hidden_state = output.last_hidden_state  # (bs, max_query_len, dim)
-        return self.qa_output(hidden_state)
+        if not self.is_ensemble:
+            output = output.last_hidden_state
+        return self.qa_output(output)
+
+
+class Ensemble(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.small = AutoModel.from_pretrained("klue/roberta-small", add_pooling_layer=False)
+        self.base = AutoModel.from_pretrained("klue/roberta-base", add_pooling_layer=False)
+        self.large = AutoModel.from_pretrained("klue/roberta-large", add_pooling_layer=False)
+
+    def forward(self, **x) -> torch.Tensor:
+        output = [model(**x).last_hidden_state for model in [self.small, self.base, self.large]]
+        return torch.concat(output, dim=-1)
 
 
 class QaOutput(nn.Module):
-    def __init__(self, hidden_size):
+    def __init__(self, hidden_size, is_ensemble):
         super().__init__()
-        self.classifier = nn.Sequential(
-            *[
-                nn.Linear(hidden_size, 2, bias=False),
-            ]
-        )
+        if is_ensemble:
+            self.classifier = nn.Sequential(
+                *[
+                    nn.Linear(hidden_size, hidden_size),
+                    nn.Dropout(0.1),
+                    nn.Linear(hidden_size, hidden_size // 2),
+                    nn.SiLU(),
+                    nn.Linear(hidden_size // 2, 2, bias=False),
+                ]
+            )
+        else:
+            self.classifier = nn.Sequential(
+                *[
+                    nn.Linear(hidden_size, 2, bias=False),
+                ]
+            )
+        for name, param in self.classifier.named_parameters():
+            if "weight" in name:
+                nn.init.xavier_uniform_(param)
+            elif "bias" in name:
+                nn.init.zeros_(param)
 
     def forward(self, hidden_states):
         logits = self.classifier(hidden_states)  # (bs, max_query_len, 2)
@@ -40,4 +78,3 @@ class QaOutput(nn.Module):
 
 if __name__ == "__main__":
     net = Roberta()
-    print("hi")

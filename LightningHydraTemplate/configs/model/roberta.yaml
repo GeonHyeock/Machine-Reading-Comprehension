@@ -26,6 +26,8 @@ scheduler_monitor:
 net:
   _target_: src.models.components.roberta.Roberta
   name: "klue/roberta-large"
+  hidden_state: 2560
+  is_ensemble: True
 
 # compile model for faster training with pytorch 2.0
 compile: false
