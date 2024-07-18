@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from transformers import AutoTokenizer, AutoModel
+from peft import inject_adapter_in_model, LoraConfig
 
 
 class Roberta(nn.Module):
@@ -9,6 +10,7 @@ class Roberta(nn.Module):
         name: str = "klue/roberta-large",
         hidden_state: int = 1024,
         is_ensemble: bool = False,
+        lora_module: list = [],
     ) -> None:
         super(Roberta, self).__init__()
         self.tokenizer = AutoTokenizer.from_pretrained(name)
@@ -19,8 +21,23 @@ class Roberta(nn.Module):
         else:
             self.model = AutoModel.from_pretrained(name, add_pooling_layer=False)
 
-        for name, param in self.model.named_parameters():
-            param.requires_grad = False
+        if lora_module:
+            lora_target = [
+                name
+                for name, module in self.model.named_modules()
+                if ((isinstance(module, nn.Linear) or isinstance(module, nn.Conv1d))) and any([m in name for m in lora_module])
+            ]
+            lora_config = LoraConfig(
+                lora_alpha=8,
+                lora_dropout=0.1,
+                r=4,
+                bias="lora_only",
+                target_modules=lora_target,
+            )
+            self.model = inject_adapter_in_model(lora_config, self.model)
+        else:
+            for name, param in self.model.named_parameters():
+                param.requires_grad = False
 
         self.qa_output = QaOutput(hidden_state, is_ensemble)
 

@@ -9,14 +9,14 @@ optimizer:
 scheduler:
   _target_: src.models.components.pytorch_cosine_annealing_with_warmup.cosine_annealing_warmup.scheduler.CosineAnnealingWarmupRestarts
   _partial_: true
-  first_cycle_steps: 6826 
+  first_cycle_steps: 1707 
   cycle_mult: 1.0
   max_lr: 1e-5
   min_lr: 1e-8
-  warmup_steps: 1826
+  warmup_steps: 307
   gamma: 0.995
-  start_epoch: 3
-  base_lr: 5e-5
+  start_epoch: 1
+  base_lr: 1e-4
 
 scheduler_monitor:
   monitor: "train/loss"
@@ -26,8 +26,11 @@ scheduler_monitor:
 net:
   _target_: src.models.components.roberta.Roberta
   name: "klue/roberta-large"
-  hidden_state: 2560
-  is_ensemble: True
+  hidden_state: 1024
+  is_ensemble: False
+  lora_module: []
+
+train_param: [.]
 
 # compile model for faster training with pytorch 2.0
 compile: false

@@ -20,6 +20,7 @@ class RobertaModule(LightningModule):
         scheduler: torch.optim.lr_scheduler,
         compile: bool,
         scheduler_monitor: dict,
+        train_param: list,
     ) -> None:
         super().__init__()
 
@@ -44,6 +45,7 @@ class RobertaModule(LightningModule):
         self.val_f1_best = MaxMetric()
 
         self.test_result = defaultdict(list)
+        self.train_param = train_param
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
@@ -124,7 +126,9 @@ class RobertaModule(LightningModule):
     def on_train_epoch_end(self) -> None:
         if self.current_epoch == self.hparams.scheduler.keywords["start_epoch"] - 1:
             for name, param in self.net.model.named_parameters():
-                if "embeddings." not in name:
+                if "embedding" in name:
+                    pass
+                elif any([tp in name for tp in self.train_param]):
                     param.requires_grad = True
 
     def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
