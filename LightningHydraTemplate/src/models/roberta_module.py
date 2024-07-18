@@ -44,7 +44,9 @@ class RobertaModule(LightningModule):
         # for tracking best so far validation accuracy
         self.val_f1_best = MaxMetric()
 
+        self.valid_result = defaultdict(list)
         self.test_result = defaultdict(list)
+
         self.train_param = train_param
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -55,7 +57,7 @@ class RobertaModule(LightningModule):
         self.val_f1.reset()
         self.val_f1_best.reset()
 
-    def post_process(self, logit, batch, n_best=20, max_answer_length=40):
+    def post_process(self, logit, batch, top_k=1, n_best=20, max_answer_length=40):
         best_answer = []
         start_logit = torch.softmax(logit["start_logits"].detach().cpu(), dim=1)
         end_logit = torch.softmax(logit["end_logits"].detach().cpu(), dim=1)
@@ -85,36 +87,35 @@ class RobertaModule(LightningModule):
                                 "logit_score": start_logit[idx][start_index] + end_logit[idx][end_index],
                             }
                         )
-            best_answer.append(
-                max(answer, key=lambda x: x["logit_score"])
-                if answer
-                else {"id": id, "input_ids": input_ids[0], "logit_score": -1}
-            )
+            if len(answer) < top_k:
+                answer += [{"id": id, "input_ids": input_ids[0], "logit_score": -1} for _ in range(top_k - len(answer))]
+            answer = sorted(answer, key=lambda x: -x["logit_score"])[:top_k]
+            best_answer.append(answer)
         return best_answer
 
     def model_step(self, batch: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         x = {k: batch[k] for k in ["input_ids", "attention_mask"]}
         logits = self.forward(x)
         loss = self.criterion(logits, batch)
-
         preds = self.post_process(logits, batch)
-        pred_answer = [self.net.tokenizer.decode(pred.get("input_ids", 0), skip_special_tokens=True) for pred in preds]
-
-        return loss, pred_answer, [answer[0] for answer in batch["answers"]]
+        return loss, preds
 
     def test_model_step(self, batch: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         x = {k: batch[k] for k in ["input_ids", "attention_mask"]}
         logits = self.forward(x)
         preds = self.post_process(logits, batch)
-
         return preds
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> torch.Tensor:
-        loss, preds, targets = self.model_step(batch)
+        loss, preds = self.model_step(batch)
+        pred_text, target = [], []
+        for idx, pred in enumerate(preds):
+            target += batch["answers"][idx]
+            pred_text.append(self.net.tokenizer.decode(pred[0]["input_ids"], skip_special_tokens=True))
 
         # update and log metrics
         self.train_loss(loss)
-        f1 = f1_score(preds, targets)
+        f1 = f1_score(pred_text, target)
         self.train_f1(f1)
         self.log("train/lr", self.trainer.optimizers[0].param_groups[0]["lr"], on_step=True, prog_bar=False)
         self.log("train/loss", self.train_loss, on_step=True, on_epoch=True, prog_bar=True)
@@ -132,19 +133,31 @@ class RobertaModule(LightningModule):
                     param.requires_grad = True
 
     def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
-        loss, preds, targets = self.model_step(batch)
+        loss, preds = self.model_step(batch)
+        for idx, pred in enumerate(preds):
+            self.valid_result["id"] += batch["id"][idx]
+            self.valid_result["targets"] += batch["answers"][idx]
+            self.valid_result["logit_score"].append(float(pred[0]["logit_score"]))
+            self.valid_result["answer"].append(self.net.tokenizer.decode(pred[0]["input_ids"], skip_special_tokens=True))
 
         # update and log metrics
         self.val_loss(loss)
-        f1 = f1_score(preds, targets)
-        self.val_f1(f1)
         self.log("val/loss", self.val_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("val/f1", self.val_f1, on_step=False, on_epoch=True, prog_bar=True)
 
     def on_validation_epoch_end(self) -> None:
+        self.valid_result = pd.DataFrame(self.valid_result)
+        idx = self.valid_result.groupby("id")["logit_score"].idxmax()
+        self.valid_result = self.valid_result.iloc[idx]
+
+        f1 = f1_score(self.valid_result["answer"].tolist(), self.valid_result["targets"].tolist())
+        self.val_f1(f1)
+        self.log("val/f1", self.val_f1, on_step=False, on_epoch=True, prog_bar=True)
+
         acc = self.val_f1.compute()
         self.val_f1_best(acc)
         self.log("val/f1_best", self.val_f1_best.compute(), sync_dist=True, prog_bar=True)
+
+        self.valid_result = defaultdict(list)
 
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
         preds = self.test_model_step(batch)
