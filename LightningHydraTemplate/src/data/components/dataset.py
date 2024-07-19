@@ -8,7 +8,7 @@ import os
 
 
 class MyDataset(Dataset):
-    def __init__(self, df, tokenizer, data_folder_path, dtype):
+    def __init__(self, df, tokenizer, data_folder_path, dtype, max_length=384, stride=128):
         self.df = df
         self.tokenizer = tokenizer
         self.path = os.path.join(data_folder_path, dtype)
@@ -26,7 +26,7 @@ class MyDataset(Dataset):
                     "question": [data.question],
                     "answers": ["" if self.dtype == "test" else data.answer],
                 }
-                preprocess_data = self.preprocess_function(data)
+                preprocess_data = self.preprocess_function(data, max_length, stride)
                 for i in range(len(preprocess_data["start_positions"])):
                     sub_data = {k: v[i].tolist() for k, v in preprocess_data.items()}
                     sub_data.update(data)

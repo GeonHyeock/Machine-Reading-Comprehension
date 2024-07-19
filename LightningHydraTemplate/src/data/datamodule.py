@@ -18,6 +18,8 @@ class DataModule(LightningDataModule):
         name: str = "",
         train_context_id: list = [0, 1, 2, 3, 4, 5, 6, 7],
         valid_context_id: list = [8, 9],
+        max_length: int = 384,
+        stride: int = 128,
     ) -> None:
         super().__init__()
 
@@ -35,9 +37,9 @@ class DataModule(LightningDataModule):
         data_dir = os.path.join(data_dir, text_folder)
         # dataset
         self.tokenizer = AutoTokenizer.from_pretrained(name, padding_side="right")
-        self.data_train: Dataset = MyDataset(train_df, self.tokenizer, data_dir, "train")
-        self.data_val: Dataset = MyDataset(valid_df, self.tokenizer, data_dir, "valid")
-        self.data_test: Dataset = MyDataset(test_df, self.tokenizer, data_dir, "test")
+        self.data_train: Dataset = MyDataset(train_df, self.tokenizer, data_dir, "train", max_length=max_length, stride=stride)
+        self.data_val: Dataset = MyDataset(valid_df, self.tokenizer, data_dir, "valid", max_length=max_length, stride=stride)
+        self.data_test: Dataset = MyDataset(test_df, self.tokenizer, data_dir, "test", max_length=max_length, stride=stride)
 
         self.batch_size_per_device = batch_size
 

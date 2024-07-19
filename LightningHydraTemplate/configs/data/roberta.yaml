@@ -7,3 +7,5 @@ text_folder: clean_data
 name: "klue/roberta-large"
 train_context_id: [0, 1, 2, 4, 5, 6, 8, 9]
 valid_context_id: [3, 7]
+max_length: 512
+stride: 128
