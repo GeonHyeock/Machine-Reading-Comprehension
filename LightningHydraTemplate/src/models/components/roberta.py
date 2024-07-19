@@ -76,6 +76,7 @@ class QaOutput(nn.Module):
         else:
             self.classifier = nn.Sequential(
                 *[
+                    nn.Dropout(0.1),
                     nn.Linear(hidden_size, 2, bias=False),
                 ]
             )
