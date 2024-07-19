@@ -9,11 +9,11 @@ optimizer:
 scheduler:
   _target_: src.models.components.pytorch_cosine_annealing_with_warmup.cosine_annealing_warmup.scheduler.CosineAnnealingWarmupRestarts
   _partial_: true
-  first_cycle_steps: 1707 
+  first_cycle_steps: 6826 
   cycle_mult: 1.0
   max_lr: 1e-5
   min_lr: 1e-8
-  warmup_steps: 307
+  warmup_steps: 2826
   gamma: 0.995
   start_epoch: 1
   base_lr: 1e-4
