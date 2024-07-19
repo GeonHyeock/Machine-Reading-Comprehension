@@ -149,12 +149,11 @@ class RobertaModule(LightningModule):
         idx = self.valid_result.groupby("id")["logit_score"].idxmax()
         self.valid_result = self.valid_result.iloc[idx]
 
-        f1 = f1_score(self.valid_result["answer"].tolist(), self.valid_result["targets"].tolist())
-        self.val_f1(f1)
-        self.log("val/f1", self.val_f1, on_step=False, on_epoch=True, prog_bar=True)
+        pred_text, target = self.valid_result["answer"].tolist(), self.valid_result["targets"].tolist()
+        f1 = f1_score(pred_text, target)
+        self.log("val/f1", f1, sync_dist=True, prog_bar=True)
 
-        acc = self.val_f1.compute()
-        self.val_f1_best(acc)
+        self.val_f1_best(f1)
         self.log("val/f1_best", self.val_f1_best.compute(), sync_dist=True, prog_bar=True)
 
         self.valid_result = defaultdict(list)
@@ -259,14 +258,14 @@ def f1_score(predictions, ground_truths):
         common = Counter(prediction_Char) & Counter(ground_truth_Char)
         num_same = sum(common.values())
         if num_same == 0:
-            return 0
-
-        precision = 1.0 * num_same / len(prediction_Char)
-        recall = 1.0 * num_same / len(ground_truth_Char)
-        f1 = (2 * precision * recall) / (precision + recall)
-        result.append(f1)
-
-    return torch.tensor(result).mean()
+            result.append(0.0)
+        else:
+            precision = 1.0 * num_same / len(prediction_Char)
+            recall = 1.0 * num_same / len(ground_truth_Char)
+            f1 = (2 * precision * recall) / (precision + recall)
+            result.append(f1)
+    result = torch.tensor(result).mean()
+    return result
 
 
 if __name__ == "__main__":
