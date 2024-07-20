@@ -8,10 +8,10 @@ import os
 
 
 class MyDataset(Dataset):
-    def __init__(self, df, tokenizer, data_folder_path, dtype, max_length=384, stride=128):
+    def __init__(self, df, tokenizer, data_folder_path, dtype, fold, max_length=384, stride=128):
         self.df = df
         self.tokenizer = tokenizer
-        self.path = os.path.join(data_folder_path, dtype)
+        self.path = os.path.join(data_folder_path, dtype, fold)
         self.data_folder_path = data_folder_path
         self.dtype = dtype
 
@@ -31,7 +31,7 @@ class MyDataset(Dataset):
                     sub_data = {k: v[i].tolist() for k, v in preprocess_data.items()}
                     sub_data.update(data)
                     if self.dtype == "test":
-                        with open(os.path.join(data_folder_path, dtype, f"{idx}.json"), "w", encoding="utf-8") as f:
+                        with open(os.path.join(self.path, f"{idx}.json"), "w", encoding="utf-8") as f:
                             json.dump(sub_data, f, indent=4)
                             idx += 1
 
@@ -41,14 +41,14 @@ class MyDataset(Dataset):
                             decode_text = sub_data["input_ids"][sub_data["start_positions"] : sub_data["end_positions"] + 1]
                             decode_text = self.tokenizer.decode(decode_text)
                             if normalize_answer(text) == normalize_answer(decode_text):
-                                with open(os.path.join(data_folder_path, dtype, f"{idx}.json"), "w", encoding="utf-8") as f:
+                                with open(os.path.join(self.path, f"{idx}.json"), "w", encoding="utf-8") as f:
                                     json.dump(sub_data, f, indent=4)
                                     idx += 1
                                     use_id += sub_data["id"]
                         else:
                             remove_id += sub_data["id"]
             remove_id = list(set(remove_id) - set(use_id))
-            pd.DataFrame(remove_id).to_csv(os.path.join(data_folder_path, f"{dtype}_remove.csv"), index=False)
+            pd.DataFrame(remove_id).to_csv(os.path.join(data_folder_path, f"{dtype}_{fold}_remove.csv"), index=False)
 
     def __len__(self):
         return len(os.listdir(self.path))
