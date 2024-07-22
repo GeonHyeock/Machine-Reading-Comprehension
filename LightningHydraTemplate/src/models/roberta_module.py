@@ -103,7 +103,7 @@ class RobertaModule(LightningModule):
     def test_model_step(self, batch: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         x = {k: batch[k] for k in ["input_ids", "attention_mask"]}
         logits = self.forward(x)
-        preds = self.post_process(logits, batch)
+        preds = self.post_process(logits, batch, top_k=5)
         return preds
 
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> torch.Tensor:
@@ -161,17 +161,17 @@ class RobertaModule(LightningModule):
     def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
         preds = self.test_model_step(batch)
         for pred in preds:
-            self.test_result["id"].append(pred["id"])
-            self.test_result["logit_score"].append(float(pred["logit_score"]))
-            self.test_result["answer"].append(self.net.tokenizer.decode(pred.get("input_ids", 0), skip_special_tokens=True))
+            for top_k, data in enumerate(pred):
+                self.test_result["id"].append(data["id"])
+                self.test_result["logit_score"].append(float(data["logit_score"]))
+                self.test_result["answer"].append(self.net.tokenizer.decode(data.get("input_ids", 0), skip_special_tokens=True))
+                self.test_result["top_k"].append(top_k + 1)
 
     def on_test_epoch_end(self) -> None:
         self.test_result = pd.DataFrame(self.test_result)
-        idx = self.test_result.groupby("id")["logit_score"].idxmax()
-
-        self.test_result = self.test_result.iloc[idx]
+        name = self.trainer.ckpt_path.split("/")[-3]
         now = "_".join(str(datetime.now(timezone("Asia/Seoul"))).split(".")[0].split(" "))
-        self.test_result.to_csv(os.path.join("data", f"{now}_result.csv"), index=False)
+        self.test_result.to_csv(os.path.join("data", f"{name}_{now}.csv"), index=False)
 
     def setup(self, stage: str) -> None:
         if self.hparams.compile and stage == "fit":
