@@ -1,7 +1,7 @@
 from typing import Any, Dict, Optional, Tuple
 from lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
-from src.data.components.dataset import MyDataset, Collate_fn
+from src.data.components.dataset_roberta import MyDataset, Collate_fn
 from transformers import AutoTokenizer
 import pandas as pd
 import os
