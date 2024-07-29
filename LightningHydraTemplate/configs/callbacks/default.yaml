@@ -10,12 +10,12 @@ model_checkpoint:
   filename: "epoch_{epoch:03d}"
   monitor: "val/f1"
   mode: "max"
-  save_last: True
+  save_last: False
   auto_insert_metric_name: False
 
 early_stopping:
   monitor: "val/f1"
-  patience: 20
+  patience: 3
   mode: "max"
 
 model_summary:

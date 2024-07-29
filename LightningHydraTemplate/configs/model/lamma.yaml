@@ -1,0 +1,35 @@
+_target_: src.models.lamma_module.lammaModule
+
+optimizer:
+  _target_: torch.optim.AdamW
+  _partial_: true
+  lr: 0.001
+
+
+scheduler:
+  _target_: src.models.components.pytorch_cosine_annealing_with_warmup.cosine_annealing_warmup.scheduler.CosineAnnealingWarmupRestarts
+  _partial_: true
+  first_cycle_steps: 1500
+  cycle_mult: 1.0
+  max_lr: 1e-4
+  min_lr: 1e-5
+  warmup_steps: 0
+  gamma: 0.995
+  start_epoch: 100
+  base_lr: 4e-5
+
+scheduler_monitor:
+  monitor: "train/loss"
+  interval: "step"
+  frequency: 1
+
+net:
+  _target_: src.models.components.lamma.lamma
+  name: "beomi/Llama-3-Open-Ko-8B-Instruct-preview"
+  lora_module: ["self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj", "self_attn.o_proj"]
+  load_ckpt: false
+
+train_param: [.]
+
+# compile model for faster training with pytorch 2.0
+compile: false
