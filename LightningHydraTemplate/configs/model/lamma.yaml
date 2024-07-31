@@ -27,7 +27,7 @@ net:
   _target_: src.models.components.lamma.lamma
   name: "beomi/Llama-3-Open-Ko-8B-Instruct-preview"
   lora_module: ["self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj", "self_attn.o_proj"]
-  load_ckpt: false
+  QaOutput_Version: 1
 
 train_param: [.]
 

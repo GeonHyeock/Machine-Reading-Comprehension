@@ -9,13 +9,17 @@ class lamma(nn.Module):
         self,
         name="beomi/Llama-3-Open-Ko-8B-Instruct-preview",
         lora_module=["self_attn.q_proj", "self_attn.v_proj", "self_attn.k_proj", "self_attn.o_proj"],
-        load_ckpt=False,
+        QaOutput_Version=1,
     ) -> None:
         super(lamma, self).__init__()
         self.tokenizer = AutoTokenizer.from_pretrained(name)
         self.tokenizer.pad_token = self.tokenizer.eos_token
         self.model = AutoModel.from_pretrained(name)
-        self.qa_output = QaOutput(4096)
+
+        if QaOutput_Version == 2:
+            self.qa_output = QaOutputV2(4096)
+        else:
+            self.qa_output = QaOutput(4096)
 
         if lora_module:
             lora_target = [
@@ -31,8 +35,6 @@ class lamma(nn.Module):
                 target_modules=lora_target,
             )
             self.model = inject_adapter_in_model(lora_config, self.model)
-        if load_ckpt:
-            print("AA")
 
     def forward(self, x) -> torch.Tensor:
         output = self.model(**x)
@@ -55,6 +57,65 @@ class QaOutput(nn.Module):
         start_logits, end_logits = logits.split(1, dim=-1)
         start_logits = start_logits.squeeze(-1).contiguous()  # (bs, max_query_len)
         end_logits = end_logits.squeeze(-1).contiguous()  # (bs, max_query_len)
+        return {"start_logits": start_logits, "end_logits": end_logits}
+
+
+class QaOutputV2(nn.Module):
+    def __init__(self, hidden_size, bottlenect=16):
+        super().__init__()
+        self.conv1 = nn.Sequential(
+            *[
+                nn.Dropout(0.2),
+                nn.Conv1d(hidden_size, hidden_size // bottlenect, 3, 1, 1, 1),
+                nn.GELU(),
+                nn.Conv1d(hidden_size // bottlenect, hidden_size, 1, 1, 0, 1),
+            ]
+        )
+        self.conv2 = nn.Sequential(
+            *[
+                nn.Dropout(0.2),
+                nn.Conv1d(hidden_size, hidden_size // bottlenect, 3, 1, 1, 2),
+                nn.GELU(),
+                nn.Conv1d(hidden_size // bottlenect, hidden_size, 1, 1, 0, 1),
+            ]
+        )
+        self.conv3 = nn.Sequential(
+            *[
+                nn.Dropout(0.2),
+                nn.Conv1d(hidden_size, hidden_size // bottlenect, 3, 1, 1, 4),
+                nn.GELU(),
+                nn.Conv1d(hidden_size // bottlenect, hidden_size, 1, 1, 0, 1),
+            ]
+        )
+
+        self.active = nn.GELU()
+
+        self.classifier1 = nn.Sequential(
+            *[
+                nn.Dropout(0.5),
+                nn.Linear(hidden_size, 2, bias=False),
+            ]
+        )
+
+        self.classifier2 = nn.Sequential(
+            *[
+                nn.Dropout(0.5),
+                nn.Linear(hidden_size, 2, bias=False),
+            ]
+        )
+
+        self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, x, a=0.7):
+        x_ = x.permute(0, 2, 1)
+        for conv in [self.conv1, self.conv1, self.conv1]:
+            x_ = self.active(conv(x_) + x_)
+        x_ = x_.permute(0, 2, 1)
+
+        logits = self.softmax(self.classifier1(x)) * a + self.softmax(self.classifier2(x_)) * (1 - a)
+        start_logits, end_logits = logits.split(1, dim=-1)
+        start_logits = start_logits.squeeze(-1).contiguous()
+        end_logits = end_logits.squeeze(-1).contiguous()
         return {"start_logits": start_logits, "end_logits": end_logits}
 
 
