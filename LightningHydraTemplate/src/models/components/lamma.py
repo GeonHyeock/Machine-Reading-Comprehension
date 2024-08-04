@@ -61,58 +61,42 @@ class QaOutput(nn.Module):
 
 
 class QaOutputV2(nn.Module):
-    def __init__(self, hidden_size, bottlenect=16):
+    def __init__(self, hidden_size, r=4):
         super().__init__()
         self.conv1 = nn.Sequential(
             *[
-                nn.Dropout(0.2),
-                nn.Conv1d(hidden_size, hidden_size // bottlenect, 3, 1, 1, 1),
+                nn.Conv1d(hidden_size, hidden_size // (r // 2), 1, 1),
                 nn.GELU(),
-                nn.Conv1d(hidden_size // bottlenect, hidden_size, 1, 1, 0, 1),
             ]
         )
         self.conv2 = nn.Sequential(
             *[
-                nn.Dropout(0.2),
-                nn.Conv1d(hidden_size, hidden_size // bottlenect, 3, 1, 1, 2),
+                nn.Conv1d(hidden_size, hidden_size // r, 3, 1, 1),
                 nn.GELU(),
-                nn.Conv1d(hidden_size // bottlenect, hidden_size, 1, 1, 0, 1),
             ]
         )
         self.conv3 = nn.Sequential(
             *[
-                nn.Dropout(0.2),
-                nn.Conv1d(hidden_size, hidden_size // bottlenect, 3, 1, 1, 4),
+                nn.Conv1d(hidden_size, hidden_size // r, 5, 1, 2),
                 nn.GELU(),
-                nn.Conv1d(hidden_size // bottlenect, hidden_size, 1, 1, 0, 1),
             ]
         )
 
-        self.active = nn.GELU()
+        self.dropout = nn.Dropout(0.33)
 
-        self.classifier1 = nn.Sequential(
+        self.classifier = nn.Sequential(
             *[
                 nn.Dropout(0.5),
                 nn.Linear(hidden_size, 2, bias=False),
             ]
         )
 
-        self.classifier2 = nn.Sequential(
-            *[
-                nn.Dropout(0.5),
-                nn.Linear(hidden_size, 2, bias=False),
-            ]
-        )
+    def forward(self, x):
+        x = self.dropout(x.permute(0, 2, 1))
+        x = torch.cat([conv(x) for conv in [self.conv1, self.conv2, self.conv3]], dim=1)
+        x = x.permute(0, 2, 1)
 
-        self.softmax = nn.Softmax(dim=1)
-
-    def forward(self, x, a=0.7):
-        x_ = x.permute(0, 2, 1)
-        for conv in [self.conv1, self.conv1, self.conv1]:
-            x_ = self.active(conv(x_) + x_)
-        x_ = x_.permute(0, 2, 1)
-
-        logits = self.softmax(self.classifier1(x)) * a + self.softmax(self.classifier2(x_)) * (1 - a)
+        logits = self.classifier(x)
         start_logits, end_logits = logits.split(1, dim=-1)
         start_logits = start_logits.squeeze(-1).contiguous()
         end_logits = end_logits.squeeze(-1).contiguous()
