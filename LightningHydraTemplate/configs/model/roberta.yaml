@@ -1,4 +1,4 @@
-_target_: src.models.roberta_module.RobertaModule
+_target_: src.models.lamma_module.lammaaModule
 
 optimizer:
   _target_: torch.optim.AdamW
@@ -9,13 +9,13 @@ optimizer:
 scheduler:
   _target_: src.models.components.pytorch_cosine_annealing_with_warmup.cosine_annealing_warmup.scheduler.CosineAnnealingWarmupRestarts
   _partial_: true
-  first_cycle_steps: 6826 
+  first_cycle_steps: 1500
   cycle_mult: 1.0
-  max_lr: 1e-5
-  min_lr: 1e-8
-  warmup_steps: 2826
+  max_lr: 1e-4
+  min_lr: 1e-5
+  warmup_steps: 0
   gamma: 0.995
-  start_epoch: 1
+  start_epoch: 100
   base_lr: 1e-4
 
 scheduler_monitor:
@@ -28,7 +28,7 @@ net:
   name: "klue/roberta-large"
   hidden_state: 1024
   is_ensemble: False
-  lora_module: []
+  lora_module: [self.query, self.key, self.value, output.dense]
 
 train_param: [.]
 
