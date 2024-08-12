@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from peft import inject_adapter_in_model, LoraConfig
+from peft import inject_adapter_in_model, LoraConfig, AdaLoraConfig
 
 
 class EXAONE(nn.Module):
@@ -9,6 +9,7 @@ class EXAONE(nn.Module):
         self,
         name="LGAI-EXAONE/EXAONE-3.0-7.8B-Instruct",
         lora_module=["attention.q_proj", "attention.k_proj", "attention.v_proj", "attention.out_proj"],
+        lora_type="lora",
         QaOutput_Version=1,
     ) -> None:
         super(EXAONE, self).__init__()
@@ -21,13 +22,23 @@ class EXAONE(nn.Module):
                 for name, module in self.model.named_modules()
                 if ((isinstance(module, nn.Linear) or isinstance(module, nn.Conv1d))) and any([m in name for m in lora_module])
             ]
-            lora_config = LoraConfig(
-                lora_alpha=8,
-                lora_dropout=0.2,
-                r=16,
-                bias="lora_only",
-                target_modules=lora_target,
-            )
+            if lora_type == "lora":
+                lora_config = LoraConfig(
+                    r=16,
+                    lora_alpha=8,
+                    lora_dropout=0.2,
+                    bias="lora_only",
+                    target_modules=lora_target,
+                )
+            elif lora_type == "adalora":
+                lora_config = AdaLoraConfig(
+                    peft_type="ADALORA",
+                    r=16,
+                    lora_alpha=8,
+                    lora_dropout=0.2,
+                    bias="lora_only",
+                    target_modules=lora_target,
+                )
             self.model = inject_adapter_in_model(lora_config, self.model)
 
             if QaOutput_Version == 1:
