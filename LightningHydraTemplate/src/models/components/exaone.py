@@ -10,11 +10,15 @@ class EXAONE(nn.Module):
         name="LGAI-EXAONE/EXAONE-3.0-7.8B-Instruct",
         lora_module=["attention.q_proj", "attention.k_proj", "attention.v_proj", "attention.out_proj"],
         lora_type="lora",
+        slide_layer=-1,
         QaOutput_Version=1,
     ) -> None:
         super(EXAONE, self).__init__()
         self.tokenizer = AutoTokenizer.from_pretrained(name)
         self.model = AutoModelForCausalLM.from_pretrained(name, trust_remote_code=True)
+
+        if slide_layer > 0:
+            self.model.transformer.h = self.model.transformer.h[:slide_layer]
 
         if lora_module:
             lora_target = [

@@ -27,7 +27,8 @@ net:
   _target_: src.models.components.exaone.EXAONE
   name: "LGAI-EXAONE/EXAONE-3.0-7.8B-Instruct"
   lora_module: ["attention.q_proj", "attention.k_proj", "attention.v_proj", "attention.out_proj"]
-  lora_type: "adalora"
+  lora_type: "lora"
+  slide_layer: 16
   QaOutput_Version: 1
   
 
