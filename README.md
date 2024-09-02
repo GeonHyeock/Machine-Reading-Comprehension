@@ -57,9 +57,23 @@
 
 참고 : [Lamma3](LightningHydraTemplate/src/models/components/lamma.py)
 
+### exaone
+
+<img width="80%" src="img/exaone.png"/>
+
+- exaone : peft 기법인 LoRA를 활용하여 학습
+- exaone adalora : peft 기법인 adaLoRA를 활용하여 학습
+
+참고 : [exaone](LightningHydraTemplate/src/models/components/exaone.py)
+
 ## Result
 
-*TODO*
+lamma Conv, exaone ensemble하여 최종 결과 제출
+
+|Type|Public|Private|
+| :---: | :---: | :---: |
+| ensemble | 0.82616 | 0.82419 |
+
 
 ## Code reproduction
 
@@ -76,12 +90,14 @@ cd LightningHydraTemplate
 python src/train.py model=lamma data=lamma trainer=gpu
 # or
 python src/train.py model=roberta data=roberta trainer=gpu
+# or
+python src/train.py model=roberta data=roberta trainer=gpu
 
 ~~~
 
 ~~~python
 # Model Inference
-python src/eval.py model=roberta data=roberta trainer=gpu ckpt_path="Path"
+python src/eval.py model=exaone data=roberta trainer=gpu ckpt_path="Path"
 ~~~
 
 ~~~python
