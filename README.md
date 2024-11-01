@@ -91,7 +91,7 @@ python src/train.py model=lamma data=lamma trainer=gpu
 # or
 python src/train.py model=roberta data=roberta trainer=gpu
 # or
-python src/train.py model=roberta data=roberta trainer=gpu
+python src/train.py model=exaone data=exaone trainer=gpu
 
 ~~~
 
